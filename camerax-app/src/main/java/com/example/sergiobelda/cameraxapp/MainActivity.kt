@@ -5,31 +5,24 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.util.Size
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.AspectRatio
-import androidx.camera.core.CameraControl
-import androidx.camera.core.CameraInfo
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.ImageProxy
-import androidx.camera.core.Preview
-import androidx.camera.core.TorchState
-import androidx.camera.core.VideoCapture
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.example.sergiobelda.cameraxapp.databinding.MainActivityBinding
 import com.google.android.material.tabs.TabLayout
+import com.iceteck.silicompressorr.SiliCompressor
 import java.io.File
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
-import java.util.Locale
+import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 @SuppressLint("RestrictedApi")
 class MainActivity : AppCompatActivity() {
@@ -122,7 +115,10 @@ class MainActivity : AppCompatActivity() {
             }.build()
 
             videoCapture = VideoCapture.Builder().apply {
-                setTargetAspectRatio(AspectRatio.RATIO_16_9)
+//                setTargetAspectRatio(AspectRatio.RATIO_16_9)
+                setTargetResolution( Size(1920, 1080) )
+                setVideoFrameRate(60)
+                setBitRate(10*1024*1024)
             }.build()
 
             val cameraProvider = cameraProviderFuture.get()
@@ -131,7 +127,7 @@ class MainActivity : AppCompatActivity() {
                 cameraSelector,
                 imagePreview,
                 // imageAnalysis,
-                imageCapture,
+//                imageCapture,
                 videoCapture
             )
             binding.previewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -244,9 +240,18 @@ class MainActivity : AppCompatActivity() {
             videoCapture?.startRecording(outputFileOptions, cameraExecutor, object : VideoCapture.OnVideoSavedCallback {
                 override fun onVideoSaved(outputFileResults: VideoCapture.OutputFileResults) {
                     val msg = "Video capture succeeded: ${file.absolutePath}"
-                    binding.previewView.post {
-                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    thread {
+                        val filePath: String =
+                            SiliCompressor.with(this@MainActivity)
+                                .compressVideo(file.absolutePath, outputDirectory.path,960, 540, 1000000)
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Compressed video path: $filePath", Toast.LENGTH_LONG).show()
+                        }
                     }
+//                    binding.previewView.post {
+//                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+//                    }
+
                 }
 
                 override fun onError(videoCaptureError: Int, message: String, cause: Throwable?) {

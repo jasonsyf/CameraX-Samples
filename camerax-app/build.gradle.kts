@@ -24,8 +24,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         viewBinding = true
@@ -35,6 +35,9 @@ android {
 
 dependencies {
     implementation(libs.androidx.appcompat)
+    implementation ("androidx.camera:camera-video:1.2.3")
+    implementation ("com.iceteck.silicompressorr:silicompressor:2.2.3")
+    implementation ("com.googlecode.mp4parser:isoparser:1.0.6") { exclude("org.aspectj",  "aspectjrt")}
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
