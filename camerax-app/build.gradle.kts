@@ -38,6 +38,7 @@ dependencies {
     implementation ("androidx.camera:camera-video:1.2.3")
     implementation ("com.iceteck.silicompressorr:silicompressor:2.2.3")
     implementation ("com.googlecode.mp4parser:isoparser:1.0.6") { exclude("org.aspectj",  "aspectjrt")}
+    implementation ("com.qmuiteam:qmui:2.0.0-alpha10")
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)

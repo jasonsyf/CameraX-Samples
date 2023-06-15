@@ -1,12 +1,17 @@
 package com.example.sergiobelda.cameraxapp
 
 import android.Manifest
+import android.R.attr.start
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import android.view.KeyEvent
+import android.view.View
+import android.widget.MediaController
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
@@ -14,15 +19,13 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.example.sergiobelda.cameraxapp.databinding.MainActivityBinding
-import com.google.android.material.tabs.TabLayout
 import com.iceteck.silicompressorr.SiliCompressor
 import java.io.File
-import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+
 
 @SuppressLint("RestrictedApi")
 class MainActivity : AppCompatActivity() {
@@ -31,10 +34,6 @@ class MainActivity : AppCompatActivity() {
     private val cameraExecutor = Executors.newSingleThreadExecutor()
 
     private var imagePreview: Preview? = null
-
-    private var imageAnalysis: ImageAnalysis? = null
-
-    private var imageCapture: ImageCapture? = null
 
     private var videoCapture: VideoCapture? = null
 
@@ -45,14 +44,17 @@ class MainActivity : AppCompatActivity() {
     private var cameraInfo: CameraInfo? = null
 
     private var linearZoom = 0f
+    private val DOWN_COUNTER_TIMER: Long = 60 * 5 * 1000 //10秒
 
     private var recording = false
+    lateinit var file: File
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = MainActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
+        val mediaController = MediaController(this);
+        binding.videoView.setMediaController(mediaController);
         if (allPermissionsGranted()) {
             startCamera()
         } else {
@@ -61,16 +63,103 @@ class MainActivity : AppCompatActivity() {
                 REQUEST_CODE_PERMISSIONS
             )
         }
+        //字体大小
+        binding.chronometer.setTextColor(Color.RED);    //字体颜色
+        binding.chronometer.setFormat("%s");
+        binding.chronometer.isCountDown=true
+        binding.chronometer.text = "05:00"
+//        binding.chronometer.base = SystemClock.elapsedRealtime()+DOWN_COUNTER_TIMER;
+        binding.chronometer.setOnChronometerTickListener { ch -> // 如果从开始计时到现在超过了60s
+            if (SystemClock.elapsedRealtime()-ch.getBase()>=0) {
+                ch.stop()
+                if (recording) {
+                    videoCapture?.stopRecording()
+                    binding.cameraCaptureButton.isSelected = false
+                    binding.cameraCaptureButton.isEnabled = false
+                    recording = false
+                }
+            }
+
+        }
 
         outputDirectory = getOutputDirectory()
 
         binding.cameraCaptureButton.setOnClickListener {
-            takePicture()
+            if (recording) {
+                binding.chronometer.stop()
+                videoCapture?.stopRecording()
+                it.isSelected = false
+                recording = false
+            } else {
+                binding.chronometer.base = SystemClock.elapsedRealtime()+DOWN_COUNTER_TIMER;
+                binding.chronometer.start()
+                recordVideo()
+                it.isSelected = true
+                recording = true
+            }
         }
-        initCameraModeSelector()
+//        initCameraModeSelector()
         binding.cameraTorchButton.setOnClickListener {
             toggleTorch()
         }
+        binding.imageButtonClose.setOnClickListener {
+            if (binding.videoView.isPlaying) {
+                binding.videoView.stopPlayback()
+            }
+            binding.chronometer.text= "05:00"
+            previewVisible(true)
+
+        }
+        binding.imageButtonConfirm.setOnClickListener {
+//            Toast.makeText(
+//                this@MainActivity,
+//                "开始压缩视频",
+//                Toast.LENGTH_SHORT
+//            ).show()
+            previewVisible(true)
+            binding.chronometer.text= "05:00"
+//            compressVideo()
+        }
+    }
+
+
+
+
+    private fun compressVideo() {
+        val time1 = System.currentTimeMillis()
+        thread {
+            val filePath: String =
+                SiliCompressor.with(this@MainActivity)
+                    .compressVideo(
+                        file.absolutePath,
+                        outputDirectory.path,
+                        960,
+                        540,
+                        1000000
+                    )
+            val time2 = System.currentTimeMillis()
+            //计算两个时间time1 time2差了多少秒
+            val time = (time2 - time1) / 1000
+            runOnUiThread {
+                previewVisible(true)
+                binding.chronometer.text= "05:00"
+                Toast.makeText(
+                    this@MainActivity,
+                    "耗时:${time}s,Compressed video path: $filePath",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun previewVisible(isPreViewVisible: Boolean) {
+        binding.cameraCaptureButton.isEnabled = true
+        binding.videoView.visibility = if (isPreViewVisible) View.GONE else View.VISIBLE
+        binding.imageButtonConfirm.visibility = if (isPreViewVisible) View.GONE else View.VISIBLE
+        binding.imageButtonClose.visibility = if (isPreViewVisible) View.GONE else View.VISIBLE
+        binding.previewView.visibility = if (isPreViewVisible) View.VISIBLE else View.GONE
+        binding.cameraCaptureButton.visibility = if (isPreViewVisible) View.VISIBLE else View.GONE
+        binding.cameraTorchButton.visibility = if (isPreViewVisible) View.VISIBLE else View.GONE
     }
 
     override fun onRequestPermissionsResult(
@@ -97,28 +186,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        val cameraSelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
+        val cameraSelector =
+            CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
         cameraProviderFuture.addListener({
             imagePreview = Preview.Builder().apply {
-                setTargetAspectRatio(AspectRatio.RATIO_16_9)
-                setTargetRotation(binding.previewView.display.rotation)
+//                setTargetAspectRatio(AspectRatio.RATIO_16_9)
+                setTargetResolution(Size(540, 960))
+                setTargetRotation(windowManager.defaultDisplay.rotation)
             }.build()
 
-            imageAnalysis = ImageAnalysis.Builder().apply {
-                setImageQueueDepth(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            }.build()
-            imageAnalysis?.setAnalyzer(cameraExecutor, LuminosityAnalyzer())
-
-            imageCapture = ImageCapture.Builder().apply {
-                setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                setFlashMode(ImageCapture.FLASH_MODE_AUTO)
-            }.build()
 
             videoCapture = VideoCapture.Builder().apply {
 //                setTargetAspectRatio(AspectRatio.RATIO_16_9)
-                setTargetResolution( Size(1920, 1080) )
-                setVideoFrameRate(60)
-                setBitRate(10*1024*1024)
+                setTargetResolution(Size(540, 960))
+                setVideoFrameRate(20)
+                setBitRate(2 * 1024 * 1024)
             }.build()
 
             val cameraProvider = cameraProviderFuture.get()
@@ -169,64 +251,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun initCameraModeSelector() {
-        binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabReselected(tab: TabLayout.Tab?) {}
-
-            override fun onTabUnselected(tab: TabLayout.Tab?) {}
-
-            override fun onTabSelected(tab: TabLayout.Tab?) {
-                when (tab?.position) {
-                    PHOTO -> {
-                        binding.cameraCaptureButton.setOnClickListener {
-                            takePicture()
-                        }
-                    }
-                    VIDEO -> {
-                        binding.cameraCaptureButton.setOnClickListener {
-                            if (recording) {
-                                videoCapture?.stopRecording()
-                                it.isSelected = false
-                                recording = false
-                            } else {
-                                recordVideo()
-                                it.isSelected = true
-                                recording = true
-                            }
-                        }
-                    }
-                }
-            }
-
-        })
-    }
-
-    private fun takePicture() {
-        val file = createFile(
-            outputDirectory,
-            FILENAME,
-            PHOTO_EXTENSION
-        )
-        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(file).build()
-        imageCapture?.takePicture(outputFileOptions, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
-            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                val msg = "Photo capture succeeded: ${file.absolutePath}"
-                binding.previewView.post {
-                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                }
-            }
-
-            override fun onError(exception: ImageCaptureException) {
-                val msg = "Photo capture failed: ${exception.message}"
-                binding.previewView.post {
-                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                }
-            }
-        })
-    }
 
     private fun recordVideo() {
-        val file = createFile(
+        file = createFile(
             outputDirectory,
             FILENAME,
             VIDEO_EXTENSION
@@ -237,30 +264,31 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.RECORD_AUDIO
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            videoCapture?.startRecording(outputFileOptions, cameraExecutor, object : VideoCapture.OnVideoSavedCallback {
-                override fun onVideoSaved(outputFileResults: VideoCapture.OutputFileResults) {
-                    val msg = "Video capture succeeded: ${file.absolutePath}"
-                    thread {
-                        val filePath: String =
-                            SiliCompressor.with(this@MainActivity)
-                                .compressVideo(file.absolutePath, outputDirectory.path,960, 540, 1000000)
+            videoCapture?.startRecording(
+                outputFileOptions,
+                cameraExecutor,
+                object : VideoCapture.OnVideoSavedCallback {
+                    override fun onVideoSaved(outputFileResults: VideoCapture.OutputFileResults) {
+                        val msg = "Video capture succeeded: ${file.absolutePath}"
                         runOnUiThread {
-                            Toast.makeText(this@MainActivity, "Compressed video path: $filePath", Toast.LENGTH_LONG).show()
+                            previewVisible(false)
+                            binding.videoView.setVideoPath(file.absolutePath)
+                            binding.videoView.start()
+                        }
+
+                    }
+
+                    override fun onError(
+                        videoCaptureError: Int,
+                        message: String,
+                        cause: Throwable?
+                    ) {
+                        val msg = "Video capture failed: $message"
+                        binding.previewView.post {
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                         }
                     }
-//                    binding.previewView.post {
-//                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-//                    }
-
-                }
-
-                override fun onError(videoCaptureError: Int, message: String, cause: Throwable?) {
-                    val msg = "Video capture failed: $message"
-                    binding.previewView.post {
-                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                    }
-                }
-            })
+                })
         }
 
     }
@@ -283,6 +311,7 @@ class MainActivity : AppCompatActivity() {
                 cameraControl?.setLinearZoom(linearZoom)
                 true
             }
+
             KeyEvent.KEYCODE_VOLUME_DOWN -> {
                 if (linearZoom >= 0.1) {
                     linearZoom -= 0.1f
@@ -290,48 +319,11 @@ class MainActivity : AppCompatActivity() {
                 cameraControl?.setLinearZoom(linearZoom)
                 true
             }
+
             else -> super.onKeyDown(keyCode, event)
         }
     }
 
-    private class LuminosityAnalyzer : ImageAnalysis.Analyzer {
-        private var lastAnalyzedTimestamp = 0L
-
-        /**
-         * Helper extension function used to extract a byte array from an
-         * image plane buffer
-         */
-        private fun ByteBuffer.toByteArray(): ByteArray {
-            rewind()    // Rewind the buffer to zero
-            val data = ByteArray(remaining())
-            get(data)   // Copy the buffer into a byte array
-            return data // Return the byte array
-        }
-
-        override fun analyze(image: ImageProxy) {
-            image.imageInfo.rotationDegrees
-            val currentTimestamp = System.currentTimeMillis()
-            // Calculate the average luma no more often than every second
-            if (currentTimestamp - lastAnalyzedTimestamp >=
-                TimeUnit.SECONDS.toMillis(1)
-            ) {
-                // Since format in ImageAnalysis is YUV, image.planes[0]
-                // contains the Y (luminance) plane
-                val buffer = image.planes[0].buffer
-                // Extract image data from callback object
-                val data = buffer.toByteArray()
-                // Convert the data into an array of pixel values
-                val pixels = data.map { it.toInt() and 0xFF }
-                // Compute average luminance for the image
-                val luma = pixels.average()
-                // Log the new luma value
-                Log.d("CameraXApp", "Average luminosity: $luma")
-                // Update timestamp of last analyzed frame
-                lastAnalyzedTimestamp = currentTimestamp
-            }
-            image.close()
-        }
-    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -354,7 +346,8 @@ class MainActivity : AppCompatActivity() {
         private const val VIDEO_EXTENSION = ".mp4"
 
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        private val REQUIRED_PERMISSIONS =
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
 
         private const val PHOTO = 0
         private const val VIDEO = 1

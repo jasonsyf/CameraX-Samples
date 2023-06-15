@@ -13,6 +13,16 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <Chronometer
+        android:id="@+id/chronometer"
+        android:layout_marginTop="36dp"
+        android:layout_marginStart="16dp"
+        android:layout_width="wrap_content"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:textSize="20dp"
+        android:textColor="@color/qmui_config_color_red"
+        android:layout_height="wrap_content" />
     <ImageButton
         android:id="@+id/camera_capture_button"
         android:layout_width="@dimen/capture_button_size"
@@ -38,32 +48,39 @@
         app:layout_constraintTop_toTopOf="parent"
         app:tint="@color/white" />
 
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tab_layout"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:background="@android:color/transparent"
+    <VideoView
+        android:id="@+id/video_view"
+        android:visibility="gone"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <ImageButton
+        android:id="@+id/image_button_close"
+        android:visibility="gone"
+        android:layout_width="@dimen/capture_button_size"
+        android:layout_height="@dimen/capture_button_size"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="@dimen/capture_button_margin"
+        android:background="@drawable/qmui_icon_notify_error"
+        android:contentDescription="@string/capture_button"
+        android:scaleType="fitCenter"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <ImageButton
+        android:id="@+id/image_button_confirm"
+        android:visibility="gone"
+        android:layout_width="@dimen/capture_button_size"
+        android:layout_height="@dimen/capture_button_size"
+        android:layout_marginBottom="@dimen/capture_button_margin"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/qmui_icon_notify_done"
+        android:contentDescription="@string/torch_button"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:tabGravity="center"
-        app:tabIndicator="@drawable/tabs_indicator"
-        app:tabIndicatorFullWidth="true"
-        app:tabIndicatorGravity="stretch"
-        app:tabMinWidth="96dp"
-        app:tabMode="fixed"
-        app:tabRippleColor="@android:color/transparent"
-        app:tabSelectedTextColor="@android:color/white"
-        app:tabTextAppearance="@style/CameraXApp.Tab">
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:tint="@color/white" />
 
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/photo" />
 
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/video" />
-    </com.google.android.material.tabs.TabLayout>
+
+
 </androidx.constraintlayout.widget.ConstraintLayout>
